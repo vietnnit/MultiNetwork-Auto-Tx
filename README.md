@@ -47,7 +47,7 @@ echo "your_private_key_here" > pk.txt
 
 1. Start the bot:
 ```bash
-node bot.js
+node index.js
 ```
 
 2. Choose from available options:

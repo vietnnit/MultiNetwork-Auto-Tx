@@ -30,6 +30,11 @@ const rl = readline.createInterface({
 
 const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve));
 
+function randomDelay(min, max) {
+    const delay = (Math.floor(Math.random() * (max - min + 1)) + min) * 1000;
+    return new Promise(resolve => setTimeout(resolve, delay));
+}
+
 function saveWalletToFile(address, privateKey) {
     const walletData = `${address}:${privateKey}\n`;
     fs.appendFileSync(WALLET_FILE, walletData);
@@ -64,72 +69,6 @@ async function claimFaucet(address) {
         return { success: false, error: 'Faucet claim failed' };
     } catch (error) {
         return { success: false, error: error.message };
-    }
-}
-
-async function handleTokenTransfers(network) {
-    try {
-        const privateKey = fs.readFileSync('pk.txt', 'utf8').trim();
-        const provider = new ethers.JsonRpcProvider(networks[network].rpc);
-        const wallet = new ethers.Wallet(privateKey, provider);
-        
-        console.log(`\nSelected Network: ${networks[network].name}`);
-        console.log(`Token Symbol: ${networks[network].symbol}`);
-        
-        const amountPerTx = await askQuestion('Enter amount of tokens per transaction: ');
-        const numberOfTx = await askQuestion('Enter number of transactions to perform: ');
-        
-        if (isNaN(amountPerTx) || isNaN(numberOfTx)) {
-            console.error('Input must be a number!');
-            return;
-        }
-
-        let completedTx = 0;
-        const initialBalance = await provider.getBalance(wallet.address);
-        console.log(`\nInitial balance: ${ethers.formatEther(initialBalance)} ${networks[network].symbol}`);
-        
-        const totalAmount = amountPerTx * numberOfTx;
-        console.log(`Total amount needed: ${totalAmount} ${networks[network].symbol}\n`);
-
-        if (initialBalance < ethers.parseEther(totalAmount.toString())) {
-            console.error('Insufficient balance for all transactions!');
-            return;
-        }
-
-        for (let i = 0; i < numberOfTx; i++) {
-            console.log(`\nProcessing transaction ${i + 1} of ${numberOfTx}`);
-            
-            const newWallet = generateNewWallet();
-            console.log(`Generated recipient address: ${newWallet.address}`);
-            saveWalletToFile(newWallet.address, newWallet.privateKey);
-            
-            const tx = {
-                to: newWallet.address,
-                value: ethers.parseEther(amountPerTx.toString())
-            };
-
-            const transaction = await wallet.sendTransaction(tx);
-            console.log(`Transaction sent: ${transaction.hash}`);
-            console.log(`View on explorer: ${networks[network].explorer}/tx/${transaction.hash}`);
-            
-            const receipt = await transaction.wait();
-            console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
-            
-            completedTx++;
-            
-            const currentBalance = await provider.getBalance(wallet.address);
-            console.log(`Current balance: ${ethers.formatEther(currentBalance)} ${networks[network].symbol}`);
-            
-            if (i < numberOfTx - 1) {
-                console.log('Waiting 5 seconds before next transaction...');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-
-        console.log('\nAll transactions completed successfully!');
-        console.log(`Completed ${completedTx} out of ${numberOfTx} transactions`);
-    } catch (error) {
-        console.error('Error:', error.message);
     }
 }
 
@@ -171,6 +110,54 @@ async function handleFaucetClaims() {
         console.log('\nProcess completed!');
         console.log(`Total wallets generated: ${numWallets}`);
         console.log(`Wallets saved to: ${WALLET_FILE}`);
+    } catch (error) {
+        console.error('Error:', error.message);
+    }
+}
+
+async function handleTokenTransfers(network) {
+    try {
+        const privateKey = fs.readFileSync('pk.txt', 'utf8').trim();
+        const provider = new ethers.JsonRpcProvider(networks[network].rpc);
+        const wallet = new ethers.Wallet(privateKey, provider);
+        
+        console.log(`\nSelected Network: ${networks[network].name}`);
+        console.log(`Token Symbol: ${networks[network].symbol}`);
+        
+        const amountPerTx = await askQuestion('Enter amount of tokens per transaction: ');
+        const numberOfTx = await askQuestion('Enter number of transactions to perform: ');
+        const minDelay = await askQuestion('Enter minimum delay (seconds) between transactions: ');
+        const maxDelay = await askQuestion('Enter maximum delay (seconds) between transactions: ');
+        
+        if (isNaN(amountPerTx) || isNaN(numberOfTx) || isNaN(minDelay) || isNaN(maxDelay)) {
+            console.error('All inputs must be numbers!');
+            return;
+        }
+
+        for (let i = 0; i < numberOfTx; i++) {
+            console.log(`\nProcessing transaction ${i + 1} of ${numberOfTx}`);
+            
+            const newWallet = generateNewWallet();
+            console.log(`Generated recipient address: ${newWallet.address}`);
+            saveWalletToFile(newWallet.address, newWallet.privateKey);
+            
+            const tx = {
+                to: newWallet.address,
+                value: ethers.parseEther(amountPerTx.toString())
+            };
+
+            const transaction = await wallet.sendTransaction(tx);
+            console.log(`Transaction sent: ${transaction.hash}`);
+            console.log(`View on explorer: ${networks[network].explorer}/tx/${transaction.hash}`);
+            
+            await transaction.wait();
+            
+            if (i < numberOfTx - 1) {
+                await randomDelay(parseInt(minDelay), parseInt(maxDelay));
+            }
+        }
+
+        console.log('\nAll transactions completed successfully!');
     } catch (error) {
         console.error('Error:', error.message);
     }

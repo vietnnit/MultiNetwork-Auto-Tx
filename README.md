@@ -21,7 +21,7 @@ Automated wallet creation, faucet claiming, and token transfer bot for Somnia an
 
 2. Nexus Network
    - RPC: https://rpc.nexus.xyz/http
-   - Chain ID: 392
+   - Chain ID: 393
    - Symbol: NEX
    - Explorer: https://explorer.nexus.xyz
 

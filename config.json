@@ -20,10 +20,10 @@
         },
         "nexus": {
             "name": "Nexus Network",
-            "chainId": 393,
-            "rpc": "https://rpc.nexus.xyz/http",
+            "chainId": 392,
+            "rpc": "https://nexus.rpc.caldera.xyz/",
             "symbol": "NEX",
-            "explorer": "https://explorer.nexus.xyz"
+            "explorer": "https://nexus.explorer.caldera.xyz"
         }
     }
 }

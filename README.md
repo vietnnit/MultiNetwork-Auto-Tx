@@ -38,10 +38,8 @@ cd MultiNetwork-Auto-Tx
 npm install
 ```
 
-3. Create a `pk.txt` file in the root directory and add your private key:
-```bash
-echo "your_private_key_here" > pk.txt
-```
+3. Create a `pk.txt` file in the root directory and add your private key: `0x......`
+
 
 ## Usage
 

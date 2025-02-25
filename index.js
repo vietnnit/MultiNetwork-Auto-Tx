@@ -515,6 +515,8 @@ async function handleNetworkOperations(network) {
             console.log('2. Staking Operations');
         } else if (network === 'nexus') {
             console.log('1. Transfer Tokens');
+        } else if (network === 'zeroGravity') { // Baris khusus untuk 0G Testnet
+            console.log('1. Transfer Tokens');
         }
         console.log('0. Back to Network Selection');
 
@@ -562,6 +564,18 @@ async function handleNetworkOperations(network) {
                         console.log('Invalid choice!');
                 }
                 break;
+
+            case 'zeroGravity': // Blok khusus untuk 0G Testnet
+                switch (choice) {
+                    case '1':
+                        await handleTokenTransfers('zeroGravity');
+                        break;
+                    case '0':
+                        return;
+                    default:
+                        console.log('Invalid choice!');
+                }
+                break;
         }
     }
 }
@@ -572,9 +586,10 @@ async function showMenu() {
         console.log('1. Somnia Network');
         console.log('2. Monad Network');
         console.log('3. Nexus Network');
-        console.log('4. Exit');
+        console.log('4. 0G Testnet');
+        console.log('5. Exit');
         
-        const choice = await askQuestion('\nSelect network (1-4): ');
+        const choice = await askQuestion('\nSelect network (1-5): ');
         
         switch (choice) {
             case '1':
@@ -587,6 +602,9 @@ async function showMenu() {
                 await handleNetworkOperations('nexus');
                 break;
             case '4':
+                await handleNetworkOperations('zeroGravity');
+                break;
+            case '5':
                 console.log('Thank you for using this bot!');
                 rl.close();
                 process.exit(0);

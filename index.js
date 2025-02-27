@@ -9,6 +9,8 @@ const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
 const networks = config.networks;
 
 const WALLET_FILE = 'wallets.txt';
+const SAVED_WALLET_FILE = 'savedwallets.txt';
+
 const PK_FILE = 'pk.txt';
 const PROXY_FILE = 'proxies.txt';
 const FAUCET_API = networks.somnia.faucetApi;
@@ -40,10 +42,10 @@ function getRandomProxy(proxies) {
 
 function createProxyAgent(proxy) {
     if (!proxy) return null;
-    
+
     const [auth, hostPort] = proxy.includes('@') ? proxy.split('@') : [null, proxy];
     const [host, port] = hostPort ? hostPort.split(':') : proxy.split(':');
-    
+
     const proxyOptions = {
         host,
         port: parseInt(port),
@@ -117,7 +119,7 @@ async function selectWallet(network) {
 
     console.log('\n=== Available Wallets ===');
     const provider = new ethers.JsonRpcProvider(networks[network].rpc);
-    
+
     const wallets = await Promise.all(privateKeys.map(async (pk, index) => {
         const wallet = new ethers.Wallet(pk, provider);
         const balance = await provider.getBalance(wallet.address);
@@ -160,11 +162,30 @@ function generateNewWallet() {
     };
 }
 
+function getSavedWallets() {
+    try {
+        const content = fs.readFileSync(SAVED_WALLET_FILE, 'utf8');
+        return content.split('\n')
+            .map(line => line.trim())
+            .filter(line => line && line.length > 0).map(s => {
+
+                let tmp = s.split(':');
+                return {
+                    address: tmp[0],
+                    privateKey: tmp[1]
+                };
+            });
+    } catch (error) {
+        console.error('Error loading saved wallets:', error.message);
+        return [];
+    }
+}
+
 async function claimFaucet(address) {
     try {
         const response = await makeRequest(FAUCET_API, {
             method: 'POST',
-            data: { address },
+            data: { address: address },
             headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
@@ -189,27 +210,22 @@ async function handleFaucetClaims() {
         console.log(`Loading proxies from ${PROXY_FILE}...`);
         const proxies = loadProxies();
         console.log(`Found ${proxies.length} proxies`);
-        
-        const numWallets = parseInt(await askQuestion('How many wallets do you want to generate for faucet claims? '));
-        
+
+        var savedWallets = getSavedWallets();
+        var numWallets = savedWallets.length;
+
         if (isNaN(numWallets) || numWallets <= 0) {
-            console.error('Number of wallets must be a positive number!');
+            console.error('The savedwallets.txt is empty. Format is: addr:pk!');
             return;
         }
 
-        console.log('\nStarting wallet generation and faucet claim process...');
-        console.log(`Wallets will be saved to: ${WALLET_FILE}\n`);
-
         for (let i = 0; i < numWallets; i++) {
-            const wallet = generateNewWallet();
             console.log(`\nWallet ${i + 1}/${numWallets}:`);
-            console.log(`Address: ${wallet.address}`);
-            
-            saveWalletToFile(wallet.address, wallet.privateKey);
-            
+            console.log(`Address: ${savedWallets[i].address}`);
+
             console.log('Attempting to claim faucet...');
-            const result = await claimFaucet(wallet.address);
-            
+            const result = await claimFaucet(savedWallets[i].address);
+
             if (result.success) {
                 console.log(`Claim successful! TX Hash: ${result.hash}`);
                 console.log(`Amount: ${ethers.formatEther(result.amount)} ${networks.somnia.symbol}`);
@@ -224,8 +240,6 @@ async function handleFaucetClaims() {
         }
 
         console.log('\nProcess completed!');
-        console.log(`Total wallets generated: ${numWallets}`);
-        console.log(`Wallets saved to: ${WALLET_FILE}`);
     } catch (error) {
         console.error('Error:', error.message);
     }
@@ -236,28 +250,32 @@ async function handleTokenTransfers(network) {
         const selectedWallet = await selectWallet(network);
         const provider = new ethers.JsonRpcProvider(networks[network].rpc);
         const wallet = new ethers.Wallet(selectedWallet.privateKey, provider);
-        
+
         console.log(`\nSelected Network: ${networks[network].name}`);
         console.log(`Token Symbol: ${networks[network].symbol}`);
         console.log(`Using wallet: ${selectedWallet.address}`);
-        
-        const amountPerTx = await askQuestion('Enter amount of tokens per transaction: ');
-        const numberOfTx = await askQuestion('Enter number of transactions to perform: ');
-        const minDelay = await askQuestion('Enter minimum delay (seconds) between transactions: ');
-        const maxDelay = await askQuestion('Enter maximum delay (seconds) between transactions: ');
-        
+
+        const savedWallets = getSavedWallets();
+        const numberOfTx = savedWallets.length;
+
+        //const amountPerTx = await askQuestion('Enter amount of tokens per transaction: ');
+        const amountPerTx = '0.001';
+        //const numberOfTx = await askQuestion('Enter number of transactions to perform: ');
+        //const minDelay = await askQuestion('Enter minimum delay (seconds) between transactions: ');
+        const minDelay = 3;
+        //const maxDelay = await askQuestion('Enter maximum delay (seconds) between transactions: ');
+        const maxDelay = 10;
+
         if (isNaN(amountPerTx) || isNaN(numberOfTx) || isNaN(minDelay) || isNaN(maxDelay)) {
             console.error('All inputs must be numbers!');
             return;
         }
 
-        for (let i = 0; i < numberOfTx; i++) {
+        //for (let i = 0; i < numberOfTx; i++) {
+        //Bỏ qua ví số 0: đây là ví gốc ko thể chuyển token cho chính mình!
+        for (let i = 1; i < numberOfTx; i++) {
             console.log(`\nProcessing transaction ${i + 1} of ${numberOfTx}`);
-            
-            const newWallet = generateNewWallet();
-            console.log(`Generated recipient address: ${newWallet.address}`);
-            saveWalletToFile(newWallet.address, newWallet.privateKey);
-            
+            const newWallet = savedWallets[i];
             const tx = {
                 to: newWallet.address,
                 value: ethers.parseEther(amountPerTx.toString())
@@ -266,12 +284,12 @@ async function handleTokenTransfers(network) {
             const transaction = await wallet.sendTransaction(tx);
             console.log(`Transaction sent: ${transaction.hash}`);
             console.log(`View on explorer: ${networks[network].explorer}/tx/${transaction.hash}`);
-            
+
             await transaction.wait();
-            
+
             if (i < numberOfTx - 1) {
                 const delay = await randomDelay(parseInt(minDelay), parseInt(maxDelay));
-                console.log(`Waiting ${delay/1000} seconds before next transaction...`);
+                console.log(`Waiting ${delay / 1000} seconds before next transaction...`);
             }
         }
 
@@ -297,7 +315,7 @@ async function checkLayerhubActivity(address) {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         return response.data;
     } catch (error) {
         console.error('Error checking Layerhub activity:', error.message);
@@ -337,7 +355,7 @@ async function stakeMolandakhubQuest(wallet) {
         );
 
         console.log('\nStaking 0.1 MON for Molandakhub Quest...');
-        
+
         const balance = await wallet.provider.getBalance(wallet.address);
         if (balance < stakeAmount) {
             throw new Error('Insufficient balance for staking');
@@ -352,9 +370,9 @@ async function stakeMolandakhubQuest(wallet) {
 
         console.log(`Transaction sent: ${stakeTx.hash}`);
         console.log(`View on explorer: ${networks.monad.explorer}/tx/${stakeTx.hash}`);
-        
+
         const receipt = await stakeTx.wait();
-        
+
         if (receipt.status === 1) {
             console.log('Quest staking successful!');
             return true;
@@ -373,7 +391,7 @@ async function handleMonadStaking() {
         const selectedWallet = await selectWallet('monad');
         const provider = new ethers.JsonRpcProvider(networks.monad.rpc);
         const wallet = new ethers.Wallet(selectedWallet.privateKey, provider);
-        
+
         console.log('\n=== Monad Staking Operations ===');
         console.log(`Using wallet: ${selectedWallet.address}`);
         console.log('1. Stake MON on kitsu.xyz');
@@ -393,18 +411,18 @@ async function handleMonadStaking() {
         switch (choice) {
             case '1':
                 const amountToStake = await askQuestion('Enter amount of MON to stake: ');
-                
+
                 if (isNaN(amountToStake) || amountToStake <= 0) {
                     console.error('Invalid amount!');
                     return;
                 }
 
                 console.log(`\nStaking ${amountToStake} MON...`);
-                
+
                 try {
                     const balance = await provider.getBalance(wallet.address);
                     const stakeAmount = ethers.parseEther(amountToStake.toString());
-                    
+
                     if (balance < stakeAmount) {
                         console.error('Insufficient balance for staking');
                         return;
@@ -416,10 +434,10 @@ async function handleMonadStaking() {
 
                     console.log(`Transaction sent: ${stakeTx.hash}`);
                     console.log(`View on explorer: ${networks.monad.explorer}/tx/${stakeTx.hash}`);
-                    
+
                     const stakeReceipt = await stakeTx.wait();
                     console.log('\nStaking transaction confirmed!');
-                    
+
                     if (stakeReceipt.status === 1) {
                         console.log('Staking successful!');
                     } else {
@@ -432,14 +450,14 @@ async function handleMonadStaking() {
 
             case '2':
                 const amountToUnstake = await askQuestion('Enter amount of sMON to unstake: ');
-                
+
                 if (isNaN(amountToUnstake) || amountToUnstake <= 0) {
                     console.error('Invalid amount!');
                     return;
                 }
 
                 console.log(`\nUnstaking ${amountToUnstake} sMON...`);
-                
+
                 try {
                     const data = ethers.concat([
                         '0x30af6b2e',
@@ -457,10 +475,10 @@ async function handleMonadStaking() {
 
                     console.log(`Transaction sent: ${unstakeTx.hash}`);
                     console.log(`View on explorer: ${networks.monad.explorer}/tx/${unstakeTx.hash}`);
-                    
+
                     const unstakeReceipt = await unstakeTx.wait();
                     console.log('\nUnstaking transaction confirmed!');
-                    
+
                     if (unstakeReceipt.status === 1) {
                         console.log('Unstaking successful!');
                     } else {
@@ -508,14 +526,12 @@ async function handleNetworkOperations(network) {
     while (true) {
         console.log(`\n=== ${networks[network].name} Operations ===`);
         if (network === 'somnia') {
-            console.log('1. Generate Wallets & Claim Faucet');
+            console.log('1. Claim Faucet');
             console.log('2. Transfer Tokens');
         } else if (network === 'monad') {
             console.log('1. Transfer Tokens');
             console.log('2. Staking Operations');
         } else if (network === 'nexus') {
-            console.log('1. Transfer Tokens');
-        } else if (network === 'zeroGravity') { // Baris khusus untuk 0G Testnet
             console.log('1. Transfer Tokens');
         }
         console.log('0. Back to Network Selection');
@@ -564,18 +580,6 @@ async function handleNetworkOperations(network) {
                         console.log('Invalid choice!');
                 }
                 break;
-
-            case 'zeroGravity': // Blok khusus untuk 0G Testnet
-                switch (choice) {
-                    case '1':
-                        await handleTokenTransfers('zeroGravity');
-                        break;
-                    case '0':
-                        return;
-                    default:
-                        console.log('Invalid choice!');
-                }
-                break;
         }
     }
 }
@@ -586,11 +590,10 @@ async function showMenu() {
         console.log('1. Somnia Network');
         console.log('2. Monad Network');
         console.log('3. Nexus Network');
-        console.log('4. 0G Testnet');
-        console.log('5. Exit');
-        
-        const choice = await askQuestion('\nSelect network (1-5): ');
-        
+        console.log('4. Exit');
+
+        const choice = await askQuestion('\nSelect network (1-4): ');
+
         switch (choice) {
             case '1':
                 await handleNetworkOperations('somnia');
@@ -602,9 +605,6 @@ async function showMenu() {
                 await handleNetworkOperations('nexus');
                 break;
             case '4':
-                await handleNetworkOperations('zeroGravity');
-                break;
-            case '5':
                 console.log('Thank you for using this bot!');
                 rl.close();
                 process.exit(0);

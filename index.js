@@ -56,10 +56,10 @@ function createProxyAgent(proxy) {
 
     if (proxy.startsWith('socks4://') || proxy.startsWith('socks5://')) {
         const proxyType = proxy.startsWith('socks5') ? 'SOCKS5' : 'SOCKS4';
-        console.log(`Proxy ${proxyType} dari proxies.txt digunakan: ${proxy}`);
+        console.log(`Proxy ${proxyType} from proxies.txt used: ${proxy}`);
         return new SocksProxyAgent(`socks${proxy.startsWith('socks5') ? 5 : 4}://${proxy.replace(/^socks[4-5]:\/\//, '')}`);
     }
-    console.log(`Proxy HTTP dari proxies.txt digunakan: ${proxy}`);
+    console.log(`Proxy HTTP from proxies.txt used: ${proxy}`);
     return new HttpsProxyAgent(`http://${proxy}`);
 }
 
@@ -72,7 +72,7 @@ async function makeRequest(url, options = {}, retries = 3) {
     while (attempt < retries) {
         const agent = proxy ? createProxyAgent(proxy) : null;
         if (!proxy) {
-            console.log('Tidak ada proxy yang digunakan untuk permintaan ini');
+            console.log('No proxy is used for this request');
         }
 
         try {
@@ -86,15 +86,15 @@ async function makeRequest(url, options = {}, retries = 3) {
         } catch (error) {
             attempt++;
             if (error.code === 'EAI_AGAIN') {
-                console.error(`Kesalahan EAI_AGAIN pada percobaan ${attempt}/${retries} dengan proxy: ${proxy || 'tanpa proxy'}`);
+                console.error(`Error EAI_AGAIN on trial ${attempt}/${retries} with proxy: ${proxy || 'without proxy'}`);
                 if (attempt < retries) {
-                    console.log('Mencoba lagi dengan proxy lain...');
+                    console.log('Try again with another proxy...');
                     proxy = getRandomProxy(proxies); // Ganti proxy untuk percobaan berikutnya
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Tunggu 2 detik sebelum retry
                     continue;
                 }
             }
-            throw new Error(`Request failed setelah ${retries} percobaan${proxy ? ' dengan proxy ' + proxy : ''}: ${error.message}`);
+            throw new Error(`Request failed after ${retries} test${proxy ? ' with proxy ' + proxy : ''}: ${error.message}`);
         }
     }
 }
